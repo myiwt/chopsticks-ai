@@ -19,12 +19,11 @@ using std::string;
 using std::stoi;
 using std::sscanf;
 
-//std::pair<std::pair<int, int>,std::pair<int, int>>  OLD_STARTING_HANDS = {{1, 1},{1,1}};
-
 std::array<int, 5> STARTING_HANDS = {1,1,1,1,0};
 
-std::vector<std::vector<string>> SPLIT_COMBINATIONS = {{"11","20"},{"12","30"},{"13","22","40"},
-                                                       {"14","32"}, {"23","14"},{"24","33"},{"33","42"}};
+std::vector<std::vector<std::pair<int, int>>> SPLIT_COMBINATIONS =
+        {{{1,1},{2,0}},{{1,2},{3,0}},{{1,3},{2,2},{4,0}},
+         {{1,4},{3,2}},{{2,4},{3,3}}};
 
 void printHands(std::array<int, 5> hands) {
     cout << endl << "             Player 1    ||   Player 2" << endl;
@@ -75,7 +74,7 @@ bool gameWon(std::array<int, 5> hands) {
 
 std::array<int, 5> attackMove(std::array<int, 5> hands, int attackHand, int targetHand) {
     std::array<int, 5> updatedHands = hands;
-    updatedHands[targetHand] = updatedHands[targetHand] + attackHand;
+    updatedHands[targetHand] = hands[targetHand] + hands[attackHand];
 
     // Check for any dead hands
     for (int i=0; i<updatedHands.size(); i++) {
@@ -87,23 +86,16 @@ std::array<int, 5> attackMove(std::array<int, 5> hands, int attackHand, int targ
     return updatedHands;
 }
 
-std::vector<string> getSplitCombinations(int leftHand, int rightHand) {
-    string yourHandsStr = to_string(leftHand) + to_string(rightHand);
-    string yourHandsStrOpp = to_string(rightHand) + to_string(leftHand);
-    std::vector<string> validSplitCombos = {};
+std::vector<std::pair<int,int>> getSplitMoves(int leftHand, int rightHand) {
+    std::vector<std::pair<int,int>> validSplitCombos = {};
 
     for (auto splitCombo: SPLIT_COMBINATIONS) {
         for (auto hands: splitCombo) {
-            if (yourHandsStr == hands) {
+            if ((leftHand == hands.first && rightHand == hands.second) ||
+            (rightHand==hands.first && leftHand == hands.second)) {
                 for (auto i: splitCombo) {
-                    if (i != yourHandsStr && i != yourHandsStrOpp) {
-                        validSplitCombos.push_back(i);
-                    }
-                }
-                return validSplitCombos;
-            } else if (yourHandsStrOpp == hands) {
-                for (auto i: splitCombo) {
-                    if (i != yourHandsStr && i != yourHandsStrOpp) {
+                    if (!((leftHand == i.first && rightHand == i.second) ||
+                        (rightHand==i.first && leftHand == i.second))) {
                         validSplitCombos.push_back(i);
                     }
                 }
@@ -114,11 +106,31 @@ std::vector<string> getSplitCombinations(int leftHand, int rightHand) {
     return validSplitCombos;
 }
 
+std::array<int, 5> splitMove(std::array<int, 5> hands, std::pair<int,int> splitCombo, bool isPlayerOne) {
+    int yourLeft, yourRight, opponentLeft, opponentRight;
+    std::array<int, 5> updatedHands = hands;
+    if (isPlayerOne) { // set reference indices for the hands array
+        yourLeft = 0;
+        yourRight = 1;
+        opponentLeft = 2;
+        opponentRight = 3;
+    } else {
+        yourLeft = 2;
+        yourRight = 3;
+        opponentLeft = 0;
+        opponentRight = 1;
+    }
+    updatedHands[yourLeft] = splitCombo.first;
+    updatedHands[yourRight] = splitCombo.second;
+    updatedHands[5] = updatedHands[5] + 1;
+    return updatedHands;
+}
+
 std::array<int, 5> makeHumanMove(std::array<int, 5> hands, bool isPlayerOne) {
     string moveRequest;
     int attackHand, targetHand;
     std::array<int, 5> updatedHands = hands;
-    std::vector<string> splitCombos;
+    std::vector<std::pair<int,int>> splitCombos;
     // If you do a split, and then the opponent splits, on your next turn you cannot split again. This avoids the game getting stuck in a loop
     bool isValidMove = false;
     bool validAttackHand = false;
@@ -152,14 +164,14 @@ std::array<int, 5> makeHumanMove(std::array<int, 5> hands, bool isPlayerOne) {
 
                 if (moveRequest == "1") {
                     if (hands[yourLeft] >= 1 && hands[yourLeft] <= 4) { // Check attack hand is not dead
-                        attackHand = hands[yourLeft];
+                        attackHand = yourLeft;
                         validAttackHand = true;
                     } else {
                         cout << "Cannot attack with that hand - try the other hand" << endl;
                     }
                 } else if (moveRequest == "2") {
                     if (hands[yourRight] >= 1 && hands[yourRight] <= 4) { // Check attack hand is not dead
-                        attackHand = hands[yourRight];
+                        attackHand = yourRight;
                         validAttackHand = true;
                     } else {
                         cout << "Cannot attack with that hand - try the other hand" << endl;
@@ -194,34 +206,27 @@ std::array<int, 5> makeHumanMove(std::array<int, 5> hands, bool isPlayerOne) {
             isValidMove = true;
         } else if (moveRequest == "2") {
             if (hands[4] <= 3) {
-                splitCombos = getSplitCombinations(hands[yourLeft], hands[yourRight]);
+                int nLeft = hands[yourLeft];
+                int nRight = hands[yourRight];
+                splitCombos = getSplitMoves(nLeft, nRight);
                 if (splitCombos.size() == 1) { // checks if you are able to split your hand
-                    int leftHand = splitCombos.front().at(0) - 48; // convert ascii char to integer
-                    int rightHand = splitCombos.front().at(1) - 48;
-                    updatedHands[yourLeft] = leftHand;
-                    updatedHands[yourRight] = rightHand;
-                    updatedHands[4] = updatedHands[4]+1;
+                    updatedHands = splitMove(hands, splitCombos.front(), isPlayerOne);
                     isValidMove = true;
                 } else if (splitCombos.size() == 2) {
                     do {
                         cout << "How would you like to split your hand?" << endl;
                         for (int i=0; i<splitCombos.size(); i++) {
-                            cout << "Option " << i+1 << ". " << splitCombos[i].at(0) << "-" << splitCombos[i].at(1) << endl;
+                            cout << "Option " << i+1 << ". " << splitCombos[i].first << "-" << splitCombos[i].second << endl;
                         }
                         cin >> moveRequest;
                     }
                     while (!cin.fail() && moveRequest != "1" && moveRequest != "2");
                     int leftHand, rightHand;
                     if (moveRequest == "1") {
-                        leftHand = splitCombos.front().at(0) - 48;
-                        rightHand = splitCombos.front().at(1) - 48;
+                        updatedHands = splitMove(hands, splitCombos.front(), isPlayerOne);
                     } else if (moveRequest == "2") {
-                        leftHand = splitCombos.at(1).at(0) - 48;
-                        rightHand = splitCombos.at(1).at(1) - 48;
+                        updatedHands = splitMove(hands, splitCombos.back(), isPlayerOne);
                     }
-                    updatedHands[yourLeft] = leftHand;
-                    updatedHands[yourRight] = rightHand;
-                    updatedHands[4] = updatedHands[4]+1;
                     isValidMove = true;
                 } else if (splitCombos.size() == 0) {
                     cout << "Your hand cannot be split - try attacking instead" << endl;
@@ -234,20 +239,136 @@ std::array<int, 5> makeHumanMove(std::array<int, 5> hands, bool isPlayerOne) {
     return updatedHands;
 }
 
+int calculateUtility(std::array<int, 5> hands) {
+    int utility = hands[0]+hands[1]-hands[2]-hands[3];
+    return utility;
+}
+
+// Return all possible game states for the next player's turn, to be used for the AI minimax algorithm
+std::vector<std::array<int, 5>> getPossibleMoves(std::array<int, 5> hands, bool isPlayerOne) {
+    int yourLeft, yourRight, opponentLeft, opponentRight;
+    std::vector<std::array<int, 5>> possibleMoves;
+    std::vector<std::pair<int,int>> possibleSplitMoves;
+
+    if (isPlayerOne) { // set reference indices for the hands array
+        yourLeft = 0;
+        yourRight = 1;
+        opponentLeft = 2;
+        opponentRight = 3;
+    } else {
+        yourLeft = 2;
+        yourRight = 3;
+        opponentLeft = 0;
+        opponentRight = 1;
+    }
+    // Add all valid attack moves
+    if (hands[yourLeft] != 0 && hands[opponentLeft] != 0) {
+        possibleMoves.push_back(attackMove(hands, yourLeft, opponentLeft));
+        if (hands[opponentRight] != 0) {
+            possibleMoves.push_back(attackMove(hands, yourLeft, opponentRight));
+        }
+    }
+    if (hands[yourRight] != 0 && hands[opponentLeft] != 0) {
+        possibleMoves.push_back(attackMove(hands, yourRight, opponentLeft));
+        if (hands[opponentRight != 0]) {
+            possibleMoves.push_back(attackMove(hands, yourRight, opponentRight));
+        }
+    }
+
+    // Add all valid split moves
+    int nLeft = hands[yourLeft];
+    int nRight = hands[yourRight];
+    possibleSplitMoves = getSplitMoves(nLeft, nRight);
+    std::array<int, 5> updatedMoves;
+    for (auto possibleSplitMove: possibleSplitMoves) {
+        updatedMoves = splitMove(hands,possibleSplitMove,isPlayerOne);
+        possibleMoves.push_back(updatedMoves);
+    }
+    return possibleMoves;
+}
+
+// Returns an array of 6 integers: 1) player 1 left hand, 2) player 1 right hand, 3) player 2 left hand,
+// 4) player 2 right hand, 5) split counter and 6) utility score.
+std::array<int, 6> minimax(std::array<int, 5> hands, bool isPlayerOne, int depth, int alpha, int beta) {
+    int utility = 0;
+    int bestUtility = 0;
+    std::array<int, 6> bestMove;
+    std::array<int, 5> updatedHands, bestHands;
+    std::vector<std::array<int, 5>> possibleMoves;
+
+    // If terminal state or depth search limit is reached, return the utility of the current game state.
+    if (depth==0 || gameWon(hands)) {
+        bestUtility = calculateUtility(hands);
+        for (int i=0; i<hands.size(); i++) {
+            bestMove[i] = hands[i];
+        }
+        bestMove.back() = bestUtility;
+        return bestMove;
+    }
+
+    possibleMoves = getPossibleMoves(hands, isPlayerOne);
+
+    if (isPlayerOne) { // Player One is the maximising player
+        bestUtility = -10;
+        for (int i=0; i<possibleMoves.size(); i++) {
+            updatedHands = possibleMoves[i];
+            std::array<int, 6> minimaxResult = minimax(updatedHands, !isPlayerOne, depth-1, alpha, beta);
+            utility = minimaxResult.back();
+            if (bestUtility < utility) {
+                for (int i=0; i<updatedHands.size(); i++) {
+                    bestMove.at(i) = updatedHands.at(i);
+                }
+                bestMove.back() = minimaxResult.back();
+                alpha = std::max(alpha, bestUtility);
+                if (beta <= alpha) {
+                    break;
+                }
+            }
+            updatedHands = hands; // undo move
+        }
+    } else { // Player Two is the minimising player
+        bestUtility = 10;
+        for (int i=0; i<possibleMoves.size(); i++) {
+            updatedHands = possibleMoves[i];
+            std::array<int, 6> minimaxResult = minimax(updatedHands, !isPlayerOne, depth-1, alpha, beta);
+            utility = minimaxResult.back();
+            if (bestUtility > utility) {
+                for (int i=0; i<updatedHands.size(); i++) {
+                    bestMove.at(i) = updatedHands.at(i);
+                }
+                bestMove.back() = minimaxResult.back();
+                bestUtility = minimaxResult.back();
+                beta = std::min(beta, bestUtility);
+                if (beta <= alpha) {
+                    break;
+                }
+            }
+            updatedHands = hands; // undo move
+        }
+    }
+    if (bestMove.empty()) {
+        for (int i=0; i<updatedHands.size(); i++) {
+            bestMove[i] = updatedHands.at(i);
+        }
+        bestMove.back() = calculateUtility(updatedHands);
+    }
+    return bestMove;
+}
+
 int humanVSAIGame() {
     string moveRequest;
-    bool isHumanPlayerOne, moveMade;
+    bool isPlayerOneTurn;
     std::array<int, 5> currentHands;
     std::array<int, 5> updatedHands;
+    std::array<int, 6> aiMove;
 
     currentHands = STARTING_HANDS;
 
     // User chooses who goes first
-    isHumanPlayerOne = setHumanPlayerOne();
+    isPlayerOneTurn = setHumanPlayerOne();
     bool isHumanTurn;
-    char currentMarker;
 
-    if (isHumanPlayerOne) {
+    if (isPlayerOneTurn) {
         isHumanTurn = true;
     } else {
         isHumanTurn = false;
@@ -258,28 +379,30 @@ int humanVSAIGame() {
     printHands(currentHands);
 
     while (!gameWon(currentHands)) {
-        moveMade = false;
         if (isHumanTurn) {
-            cout << "--- Human's turn " << (isHumanPlayerOne ? "(Player One)" : "(Player Two)") << "---" << endl;
+            cout << "--- Human's turn " << (isPlayerOneTurn ? "(Player One)" : "(Player Two)") << "---" << endl;
         } else {
-            cout << "--- AI's turn " << (isHumanPlayerOne ? "(Player Two)" : "(Player One)") << " ---" << endl;
+            cout << "--- AI's turn " << (isPlayerOneTurn ? "(Player One)" : "(Player Two)") << " ---" << endl;
         }
-         if (isHumanTurn) {
-             updatedHands = makeHumanMove(currentHands, isHumanPlayerOne);
+        if (isHumanTurn) {
+             updatedHands = makeHumanMove(currentHands, isPlayerOneTurn);
              printHands(updatedHands);
              currentHands = updatedHands;
-         }
-         else if (!isHumanTurn) {
-             //std::pair<string, int> aiMinimax = minimax(board, depth, currentMarker, INT16_MIN, INT16_MAX);
-             updatedHands = makeHumanMove(currentHands, !isHumanPlayerOne);
-             printHands(updatedHands);
-             currentHands = updatedHands;
-         }
+        }
+        else if (!isHumanTurn) {
+            aiMove = minimax(currentHands, isPlayerOneTurn, depth, INT16_MIN, INT16_MAX);
+            for (int i=0; i<updatedHands.size(); i++) {
+                updatedHands.at(i) = aiMove.at(i);
+            }
+            printHands(updatedHands);
+            currentHands = updatedHands;
+        }
         isHumanTurn = !isHumanTurn;
-     }
+        isPlayerOneTurn = !isPlayerOneTurn;
+    }
 
-     // Game has ended - print end message
-     cout << endl;
+    // Game has ended - print end message
+    cout << endl;
     if (gameWon(currentHands)) {
          string winMessage = isHumanTurn ? "AI wins!": "Human wins!";
          cout << winMessage << endl;

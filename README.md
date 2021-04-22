@@ -1,4 +1,4 @@
-# The Chopsticks Hand Game
+# The Chopsticks Hand Game with AI
 
 ![Chopsticks game](chopsticks-image.jpg)
 Source: [Wikihow](https://www.wikihow.com/Play-Chopsticks)
