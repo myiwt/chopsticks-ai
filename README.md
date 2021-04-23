@@ -4,8 +4,7 @@
 Source: [Wikihow](https://www.wikihow.com/Play-Chopsticks)
 ## The game
 
-This program runs this popular kids' game and includes an
-AI player to play against.
+This program runs this popular kids' game and includes an AI player.
 
 ## The algorithm
 
@@ -15,6 +14,14 @@ will search through the game tree to decide its move.
 
 
 The evaluation function used to calculate the utility scores for this game is:
+
+Eval(s) = h<sub>player 1</sub> - h<sub>player 2</sub>
+
+where:
+
+h<sub>player 1</sub> = the sum of points on player 1's left and right hands
+
+h<sub>player 2</sub> = the sum of points on player 2's left and right hands
 
 ## The program
 This program runs on Windows with C++20.
