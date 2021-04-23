@@ -3,6 +3,10 @@
 
 #endif //CHOPSTICKS_AI_FUNCTIONS_H
 
+
+#include "windows.h"
+#include "psapi.h"
+#include "monitor.h"
 #include <iostream>
 #include <string>
 #include <regex>
@@ -10,6 +14,7 @@
 #include <array>
 #include<stdio.h>
 #include<stdlib.h>
+#include <chrono>
 
 using namespace std;
 using std::cout;
@@ -53,7 +58,7 @@ int setAIAlgorithm() {
     string depthStr;
     do {
         cout << "What depth search level should the AI algorithm play?" << endl;
-        cout << "A depth of 9 represents a full depth search. (Choose a number from 1 to 9)" << endl;
+        cout << "(Choose a number from 1 to 9)" << endl;
         cin >> depthStr;
     }
 
@@ -86,8 +91,12 @@ std::array<int, 5> attackMove(std::array<int, 5> hands, int attackHand, int targ
     return updatedHands;
 }
 
-std::vector<std::pair<int,int>> getSplitMoves(int leftHand, int rightHand) {
+std::vector<std::pair<int,int>> getSplitMoves(std::array<int, 5> hands, int leftHand, int rightHand) {
     std::vector<std::pair<int,int>> validSplitCombos = {};
+    // Only a maximum of 2 splits can be made to prevent an endless loop of splits in a game
+    if (hands[4]>2) {
+        return validSplitCombos;
+    }
 
     for (auto splitCombo: SPLIT_COMBINATIONS) {
         for (auto hands: splitCombo) {
@@ -112,17 +121,13 @@ std::array<int, 5> splitMove(std::array<int, 5> hands, std::pair<int,int> splitC
     if (isPlayerOne) { // set reference indices for the hands array
         yourLeft = 0;
         yourRight = 1;
-        opponentLeft = 2;
-        opponentRight = 3;
     } else {
         yourLeft = 2;
         yourRight = 3;
-        opponentLeft = 0;
-        opponentRight = 1;
     }
     updatedHands[yourLeft] = splitCombo.first;
     updatedHands[yourRight] = splitCombo.second;
-    updatedHands[5] = updatedHands[5] + 1;
+    updatedHands[4] = updatedHands[4] + 1;
     return updatedHands;
 }
 
@@ -208,7 +213,7 @@ std::array<int, 5> makeHumanMove(std::array<int, 5> hands, bool isPlayerOne) {
             if (hands[4] <= 3) {
                 int nLeft = hands[yourLeft];
                 int nRight = hands[yourRight];
-                splitCombos = getSplitMoves(nLeft, nRight);
+                splitCombos = getSplitMoves(hands, nLeft, nRight);
                 if (splitCombos.size() == 1) { // checks if you are able to split your hand
                     updatedHands = splitMove(hands, splitCombos.front(), isPlayerOne);
                     isValidMove = true;
@@ -240,8 +245,14 @@ std::array<int, 5> makeHumanMove(std::array<int, 5> hands, bool isPlayerOne) {
 }
 
 int calculateUtility(std::array<int, 5> hands) {
-    int utility = hands[0]+hands[1]-hands[2]-hands[3];
-    return utility;
+    if (hands[0]==0 && hands[1]==0) {
+        return -10;
+    } else if (hands[2]==0 && hands[3]==0) {
+        return 10;
+    } else {
+        int utility = hands[0]+hands[1]-hands[2]-hands[3];
+        return utility;
+    }
 }
 
 // Return all possible game states for the next player's turn, to be used for the AI minimax algorithm
@@ -264,21 +275,21 @@ std::vector<std::array<int, 5>> getPossibleMoves(std::array<int, 5> hands, bool 
     // Add all valid attack moves
     if (hands[yourLeft] != 0 && hands[opponentLeft] != 0) {
         possibleMoves.push_back(attackMove(hands, yourLeft, opponentLeft));
-        if (hands[opponentRight] != 0) {
+    }
+    if (hands[yourLeft]  && hands[opponentRight] != 0) {
             possibleMoves.push_back(attackMove(hands, yourLeft, opponentRight));
-        }
     }
     if (hands[yourRight] != 0 && hands[opponentLeft] != 0) {
         possibleMoves.push_back(attackMove(hands, yourRight, opponentLeft));
-        if (hands[opponentRight != 0]) {
-            possibleMoves.push_back(attackMove(hands, yourRight, opponentRight));
-        }
+    }
+    if (hands[yourRight] != 0 && hands[opponentRight != 0]) {
+        possibleMoves.push_back(attackMove(hands, yourRight, opponentRight));
     }
 
     // Add all valid split moves
     int nLeft = hands[yourLeft];
     int nRight = hands[yourRight];
-    possibleSplitMoves = getSplitMoves(nLeft, nRight);
+    possibleSplitMoves = getSplitMoves(hands, nLeft, nRight);
     std::array<int, 5> updatedMoves;
     for (auto possibleSplitMove: possibleSplitMoves) {
         updatedMoves = splitMove(hands,possibleSplitMove,isPlayerOne);
@@ -315,11 +326,14 @@ std::array<int, 6> minimax(std::array<int, 5> hands, bool isPlayerOne, int depth
             std::array<int, 6> minimaxResult = minimax(updatedHands, !isPlayerOne, depth-1, alpha, beta);
             utility = minimaxResult.back();
             if (bestUtility < utility) {
+                bestUtility = utility;
                 for (int i=0; i<updatedHands.size(); i++) {
                     bestMove.at(i) = updatedHands.at(i);
                 }
-                bestMove.back() = minimaxResult.back();
-                alpha = std::max(alpha, bestUtility);
+                bestMove.back() = bestUtility;
+                if (bestUtility > alpha) {
+                    alpha = bestUtility;
+                }
                 if (beta <= alpha) {
                     break;
                 }
@@ -333,12 +347,14 @@ std::array<int, 6> minimax(std::array<int, 5> hands, bool isPlayerOne, int depth
             std::array<int, 6> minimaxResult = minimax(updatedHands, !isPlayerOne, depth-1, alpha, beta);
             utility = minimaxResult.back();
             if (bestUtility > utility) {
+                bestUtility = utility;
                 for (int i=0; i<updatedHands.size(); i++) {
                     bestMove.at(i) = updatedHands.at(i);
                 }
-                bestMove.back() = minimaxResult.back();
-                bestUtility = minimaxResult.back();
-                beta = std::min(beta, bestUtility);
+                bestMove.back() = bestUtility;
+                if (bestUtility < beta) {
+                    beta = bestUtility;
+                }
                 if (beta <= alpha) {
                     break;
                 }
@@ -346,12 +362,12 @@ std::array<int, 6> minimax(std::array<int, 5> hands, bool isPlayerOne, int depth
             updatedHands = hands; // undo move
         }
     }
-    if (bestMove.empty()) {
+    /* if (bestMove.empty()) {
         for (int i=0; i<updatedHands.size(); i++) {
             bestMove[i] = updatedHands.at(i);
         }
         bestMove.back() = calculateUtility(updatedHands);
-    }
+    } */
     return bestMove;
 }
 
@@ -411,5 +427,53 @@ int humanVSAIGame() {
 }
 
 int AIGameSimulations() {
+    cout << "AI P1 depth, AI P2 depth, P1 result, time taken (seconds), game states, virtual memory (bytes), CPU (% utilisation)" << endl;
+    string result;
+    int totalDepth = 9;
+    int nGameStates;
+    bool isPlayerOneTurn;
+    std::array<int, 5> currentHands;
+    std::array<int, 5> updatedHands;
+    std::array<int, 6> aiMove;
+    double cpuUsed;
+
+    for (int i=1; i<=totalDepth; i++) {
+        for (int j=1; j<=totalDepth; j++) {
+            auto start = std::chrono::high_resolution_clock::now();
+            init();
+            currentHands = STARTING_HANDS;
+            nGameStates = 0;
+            isPlayerOneTurn = true;
+            while(!gameWon(currentHands) && nGameStates < 40) {
+                if (isPlayerOneTurn) {
+                    aiMove = minimax(currentHands, isPlayerOneTurn, i, INT16_MIN, INT16_MAX);
+                    for (int k=0; k<updatedHands.size(); k++) {
+                        updatedHands.at(k) = aiMove.at(k);
+                    }
+                    currentHands = updatedHands;
+                } else {
+                    aiMove = minimax(currentHands, isPlayerOneTurn, j, INT16_MIN, INT16_MAX);
+                    for (int l=0; l<updatedHands.size(); l++) {
+                        updatedHands.at(l) = aiMove.at(l);
+                    }
+                    currentHands = updatedHands;
+                }
+                isPlayerOneTurn= !isPlayerOneTurn;
+                nGameStates++;
+            }
+            result = isPlayerOneTurn ? "Lose": "Win";
+            if (nGameStates>=40) {
+                result = "Draw";
+            }
+            auto finish = std::chrono::high_resolution_clock::now();
+            std::chrono::duration<double> elapsed = finish - start;
+            PROCESS_MEMORY_COUNTERS_EX pmc;
+            GetProcessMemoryInfo(GetCurrentProcess(), (PROCESS_MEMORY_COUNTERS*)&pmc, sizeof(pmc));
+            SIZE_T virtualMemUsed = pmc.PrivateUsage;
+            cpuUsed = getCurrentValue();
+
+            cout << i << "," << j << "," << result << "," << elapsed.count() << "," << nGameStates << "," << virtualMemUsed << "," << cpuUsed << endl;
+        }
+    }
     return 0;
 }
